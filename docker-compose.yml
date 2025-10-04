@@ -1,0 +1,83 @@
+# FDS Docs - Docker Compose
+# Updated to use SQLite and disable Redis for simpler local development
+
+services:
+  # FDS Docs Application (API + UI) — disabled per request
+  # app:
+  #   build: .
+  #   ports:
+  #     - "80:80"      # UI served by nginx
+  #     - "8080:8080"  # API direct access
+  #   environment:
+  #     - DATABASE_URL=sqlite+aiosqlite:///./data/app.db
+  #     - USE_REDIS=false
+  #     - DOCUMENTS_PATH=/app/data/documents
+  #     - VECTOR_DB_PATH=/app/data/vectordb
+  #     - API_HOST=0.0.0.0
+  #     - API_PORT=8080
+  #     - DEBUG=false
+  #     - LOG_LEVEL=INFO
+  #     # Local LLM configuration (optional)
+  #     - USE_LOCAL_LLM=${USE_LOCAL_LLM:-false}
+  #     - LOCAL_LLM_BASE_URL=${LOCAL_LLM_BASE_URL:-http://llama:8080/v1}
+  #     - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-llama-2-7b-chat}
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+  #   volumes:
+  #     - ./data:/app/data
+  #     - ./logs:/app/logs
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #   restart: unless-stopped
+
+  # Local LLM: llama.cpp server (OpenAI-compatible API)
+  llama:
+    image: ollama/ollama:latest
+    ports:
+      - "8090:11434" # Expose OpenAI-compatible API on localhost:8090
+    environment:
+      - OLLAMA_KEEP_ALIVE=5m
+    volumes:
+      - ollama:/root/.ollama
+    restart: unless-stopped
+
+  # Optional: PostgreSQL Database (commented out - using SQLite by default)
+  # postgres:
+  #   image: postgres:15-alpine
+  #   ports:
+  #     - "5442:5442"
+  #   environment:
+  #     POSTGRES_DB: ${POSTGRES_DB:-rag_db}
+  #     POSTGRES_USER: ${POSTGRES_USER:-rag_user}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag_password}
+  #     POSTGRES_PORT: 5442
+  #   command: ["postgres", "-p", "5442"]
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag_user} -d ${POSTGRES_DB:-rag_db} -p 5442"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #   restart: unless-stopped
+
+  # Optional: Redis Cache (commented out - using in-memory cache by default)
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #   restart: unless-stopped
+
+volumes:
+  ollama:
+  # postgres_data:
+  # redis_data:

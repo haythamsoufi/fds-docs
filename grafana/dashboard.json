@@ -1,0 +1,342 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "RAG System Monitoring Dashboard",
+    "tags": ["rag", "monitoring", "ai"],
+    "style": "dark",
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "System Health Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up{job=\"rag-system\"}",
+            "legendFormat": "System Status"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": 0
+                },
+                {
+                  "color": "green",
+                  "value": 1
+                }
+              ]
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Query Response Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(rag_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(rag_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "50th percentile"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Response Time (seconds)",
+            "min": 0
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "Query Throughput",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(rag_queries_total[5m])",
+            "legendFormat": "{{search_type}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Queries per second",
+            "min": 0
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 4,
+        "title": "Confidence Score Distribution",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(rag_confidence_score_bucket[5m]))",
+            "legendFormat": "95th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(rag_confidence_score_bucket[5m]))",
+            "legendFormat": "50th percentile"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Confidence Score",
+            "min": 0,
+            "max": 1
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        }
+      },
+      {
+        "id": 5,
+        "title": "Error Rate by Search Type",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(rag_queries_total{status=\"error\"}[5m]) / rate(rag_queries_total[5m])",
+            "legendFormat": "{{search_type}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Error Rate",
+            "min": 0,
+            "max": 1
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "id": 6,
+        "title": "Cache Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(rag_cache_hits_total[5m]) / (rate(rag_cache_hits_total[5m]) + rate(rag_cache_misses_total[5m]))",
+            "legendFormat": "{{cache_type}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Cache Hit Rate",
+            "min": 0,
+            "max": 1
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 16
+        }
+      },
+      {
+        "id": 7,
+        "title": "Retrieval Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(rag_retrieval_duration_seconds_bucket[5m]))",
+            "legendFormat": "Retrieval 95th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(rag_retrieval_duration_seconds_bucket[5m]))",
+            "legendFormat": "Retrieval 50th percentile"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Duration (seconds)",
+            "min": 0
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 24
+        }
+      },
+      {
+        "id": 8,
+        "title": "Generation Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(rag_generation_duration_seconds_bucket[5m]))",
+            "legendFormat": "Generation 95th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(rag_generation_duration_seconds_bucket[5m]))",
+            "legendFormat": "Generation 50th percentile"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Duration (seconds)",
+            "min": 0
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 24
+        }
+      },
+      {
+        "id": 9,
+        "title": "System Resources",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rag_memory_usage_bytes / 1024 / 1024 / 1024",
+            "legendFormat": "Memory Usage (GB)"
+          },
+          {
+            "expr": "rag_cpu_usage_percent",
+            "legendFormat": "CPU Usage (%)"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Usage",
+            "min": 0
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 32
+        }
+      },
+      {
+        "id": 10,
+        "title": "Active Connections",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rag_active_connections",
+            "legendFormat": "Active Connections"
+          },
+          {
+            "expr": "rag_vector_db_connections",
+            "legendFormat": "Vector DB Connections"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Connections",
+            "min": 0
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 32
+        }
+      },
+      {
+        "id": 11,
+        "title": "Retrieved Chunks Distribution",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(rag_retrieved_chunks_count_bucket[5m]))",
+            "legendFormat": "95th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(rag_retrieved_chunks_count_bucket[5m]))",
+            "legendFormat": "50th percentile"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Number of Chunks",
+            "min": 0
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 40
+        }
+      },
+      {
+        "id": 12,
+        "title": "Answer Length Distribution",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(rag_answer_length_bucket[5m]))",
+            "legendFormat": "95th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(rag_answer_length_bucket[5m]))",
+            "legendFormat": "50th percentile"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Answer Length (characters)",
+            "min": 0
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 40
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "schemaVersion": 27,
+    "version": 1
+  }
+}

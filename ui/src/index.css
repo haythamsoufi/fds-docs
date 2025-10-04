@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  body {
+    @apply bg-ifrc-white text-ifrc-navy-800;
+  }
+}
+
+@layer components {
+  /* IFRC Button Styles */
+  .btn {
+    @apply inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ifrc-red-500 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  
+  .btn-primary {
+    @apply bg-ifrc-red-500 text-ifrc-white hover:bg-ifrc-red-600 active:bg-ifrc-red-700;
+  }
+  
+  .btn-secondary {
+    @apply bg-ifrc-navy-100 text-ifrc-navy-900 hover:bg-ifrc-navy-200 active:bg-ifrc-navy-300;
+  }
+  
+  .btn-outline {
+    @apply border border-ifrc-navy-300 bg-transparent text-ifrc-navy-700 hover:bg-ifrc-navy-50 active:bg-ifrc-navy-100;
+  }
+  
+  .btn-outline-red {
+    @apply border border-ifrc-red-500 bg-transparent text-ifrc-red-600 hover:bg-ifrc-red-50 active:bg-ifrc-red-100;
+  }
+  
+  /* IFRC Card Styles */
+  .card {
+    @apply rounded-lg border border-ifrc-navy-200 bg-ifrc-white shadow-sm;
+  }
+  
+  .card-elevated {
+    @apply rounded-lg border border-ifrc-navy-200 bg-ifrc-white shadow-lg;
+  }
+  
+  /* IFRC Input Styles */
+  .input {
+    @apply flex h-10 w-full rounded-md border border-ifrc-navy-300 bg-ifrc-white px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-ifrc-navy-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ifrc-red-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  
+  /* IFRC Navigation Styles */
+  .nav-item {
+    @apply flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors;
+  }
+  
+  .nav-item-active {
+    @apply bg-ifrc-red-100 text-ifrc-red-700;
+  }
+  
+  .nav-item-inactive {
+    @apply text-ifrc-navy-600 hover:bg-ifrc-navy-100 hover:text-ifrc-navy-900;
+  }
+  
+  /* IFRC Status Indicators */
+  .status-success {
+    @apply bg-theme-green-100 text-theme-green-800 border border-theme-green-200;
+  }
+  
+  .status-warning {
+    @apply bg-theme-orange-100 text-theme-orange-800 border border-theme-orange-200;
+  }
+  
+  .status-error {
+    @apply bg-ifrc-red-100 text-ifrc-red-800 border border-ifrc-red-200;
+  }
+  
+  .status-info {
+    @apply bg-theme-blue-100 text-theme-blue-800 border border-theme-blue-200;
+  }
+  
+  /* IFRC Theme-specific sections */
+  .theme-climate {
+    @apply bg-theme-green-50 border-theme-green-200;
+  }
+  
+  .theme-values {
+    @apply bg-theme-violet-50 border-theme-violet-200;
+  }
+  
+  .theme-health {
+    @apply bg-theme-blue-50 border-theme-blue-200;
+  }
+  
+  .theme-migration {
+    @apply bg-theme-orange-50 border-theme-orange-200;
+  }
+  
+  .theme-disaster {
+    @apply bg-ifrc-red-50 border-ifrc-red-200;
+  }
+  
+  /* IFRC Typography */
+  .heading-primary {
+    @apply text-ifrc-navy-900 font-bold;
+  }
+  
+  .heading-secondary {
+    @apply text-ifrc-navy-800 font-semibold;
+  }
+  
+  .text-muted {
+    @apply text-ifrc-navy-600;
+  }
+  
+  .text-accent {
+    @apply text-ifrc-red-600;
+  }
+}
