@@ -52,6 +52,17 @@ export interface QueryHistory {
   results_count: number
 }
 
+export interface LLMStatus {
+  status: 'available' | 'configured_but_unavailable' | 'not_configured' | 'error'
+  openai_configured: boolean
+  local_llm_configured: boolean
+  local_llm_available: boolean
+  response_mode: 'llm_generated' | 'extractive_summary'
+  llm_model?: string
+  base_url?: string
+  error?: string
+}
+
 export const queryService = {
   // Search documents
   async searchDocuments(request: QueryRequest): Promise<QueryResponse> {
@@ -64,6 +75,12 @@ export const queryService = {
     const response = await api.get('/api/v1/queries/history', {
       params: { limit }
     })
+    return response.data
+  },
+
+  // Get LLM status
+  async getLLMStatus(): Promise<LLMStatus> {
+    const response = await api.get('/api/v1/llm/status')
     return response.data
   }
 }

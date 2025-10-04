@@ -4,9 +4,24 @@ import {
   Clock, 
   FileText, 
   TrendingUp,
-  RefreshCw
+  RefreshCw,
+  Brain,
+  BookOpen,
+  Zap,
+  Target,
+  Rocket,
+  Microscope,
+  BookMarked,
+  Sparkles,
+  Search as SearchIcon,
+  Puzzle,
+  Theater,
+  Settings,
+  Palette,
+  Eye,
+  Plane
 } from 'lucide-react'
-import { queryService, QueryResponse, QueryHistory } from '../services/queryService'
+import { queryService, QueryResponse, QueryHistory, LLMStatus } from '../services/queryService'
 import CitationBlock from '../components/CitationBlock'
 import EvidenceBlock from '../components/EvidenceBlock'
 import toast from 'react-hot-toast'
@@ -16,13 +31,45 @@ const Query = () => {
   const [searchResults, setSearchResults] = useState<QueryResponse | null>(null)
   const [queryHistory, setQueryHistory] = useState<QueryHistory[]>([])
   const [loading, setLoading] = useState(false)
-  const [maxResults, setMaxResults] = useState(5)
+  const [loadingMessage, setLoadingMessage] = useState<{ icon: any, text: string } | null>(null)
+  const [maxResults, setMaxResults] = useState(3)
   const [searchType, setSearchType] = useState<'hybrid' | 'semantic' | 'keyword'>('hybrid')
   const [includeMetadata, setIncludeMetadata] = useState(true)
+  const [llmStatus, setLlmStatus] = useState<LLMStatus | null>(null)
+  const [showSearchHelp, setShowSearchHelp] = useState(false)
+
+  // Fun loading messages with SVG icons
+  const loadingMessages = [
+    { icon: SearchIcon, text: "Digging through documents..." },
+    { icon: Brain, text: "Consulting the AI oracle..." },
+    { icon: BookOpen, text: "Scanning the knowledge base..." },
+    { icon: Zap, text: "Processing your query..." },
+    { icon: Search, text: "Hunting for answers..." },
+    { icon: Sparkles, text: "Connecting the dots..." },
+    { icon: Target, text: "Finding the perfect match..." },
+    { icon: Rocket, text: "Launching search sequence..." },
+    { icon: Microscope, text: "Analyzing content..." },
+    { icon: BookMarked, text: "Reading between the lines..." },
+    { icon: Theater, text: "Performing search magic..." },
+    { icon: Sparkles, text: "Uncovering hidden gems..." },
+    { icon: SearchIcon, text: "Following the paper trail..." },
+    { icon: Puzzle, text: "Piecing together clues..." },
+    { icon: Theater, text: "Consulting the document oracle..." },
+    { icon: Settings, text: "Tuning the search engine..." },
+    { icon: Palette, text: "Crafting the perfect answer..." },
+    { icon: Eye, text: "Predicting what you need..." },
+    { icon: Theater, text: "Putting on the search show..." },
+    { icon: Plane, text: "Aerial scanning in progress..." }
+  ]
 
   useEffect(() => {
     fetchQueryHistory()
+    fetchLLMStatus()
   }, [])
+
+  const getRandomLoadingMessage = () => {
+    return loadingMessages[Math.floor(Math.random() * loadingMessages.length)]
+  }
 
   const fetchQueryHistory = async () => {
     try {
@@ -33,6 +80,15 @@ const Query = () => {
     }
   }
 
+  const fetchLLMStatus = async () => {
+    try {
+      const status = await queryService.getLLMStatus()
+      setLlmStatus(status)
+    } catch (error) {
+      console.error('Error fetching LLM status:', error)
+    }
+  }
+
   const handleSearch = async () => {
     if (!query.trim()) {
       toast.error('Please enter a query', { position: 'bottom-left', className: 'lg:ml-64' })
@@ -40,6 +96,13 @@ const Query = () => {
     }
 
     setLoading(true)
+    setLoadingMessage(getRandomLoadingMessage())
+    
+    // Set up interval to cycle through loading messages
+    const messageInterval = setInterval(() => {
+      setLoadingMessage(getRandomLoadingMessage())
+    }, 4000) // Change message every 4 seconds
+    
     try {
       const results = await queryService.searchDocuments({
         query: query.trim(),
@@ -79,7 +142,9 @@ const Query = () => {
       toast.error(errorMessage, { position: 'bottom-left', className: 'lg:ml-64' })
       console.error('Error searching documents:', error)
     } finally {
+      clearInterval(messageInterval)
       setLoading(false)
+      setLoadingMessage(null)
     }
   }
 
@@ -117,9 +182,167 @@ const Query = () => {
         </p>
       </div>
 
+      {/* LLM Status Indicator */}
+      {llmStatus && (
+        <div className="card p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className={`w-3 h-3 rounded-full ${
+                llmStatus.status === 'available' 
+                  ? 'bg-green-500' 
+                  : llmStatus.status === 'configured_but_unavailable'
+                  ? 'bg-yellow-500'
+                  : 'bg-red-500'
+              }`}></div>
+              <div>
+                <h3 className="font-medium text-secondary-900">
+                  AI Response Mode: {
+                    llmStatus.response_mode === 'llm_generated' 
+                      ? 'LLM Generated' 
+                      : 'Extractive Summary'
+                  }
+                </h3>
+                <p className="text-sm text-secondary-600">
+                  {llmStatus.status === 'available' 
+                    ? `Using ${llmStatus.llm_model || 'AI model'} for enhanced responses`
+                    : llmStatus.status === 'configured_but_unavailable'
+                    ? 'LLM configured but unavailable - using extractive summary'
+                    : 'No LLM configured - using extractive summary for responses'
+                  }
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={fetchLLMStatus}
+              className="btn btn-outline btn-sm"
+              title="Refresh LLM status"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
+          
+          {llmStatus.status === 'configured_but_unavailable' && (
+            <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-sm text-yellow-800">
+                <strong>Note:</strong> Your local LLM server appears to be down. 
+                Responses will use extractive summaries instead of AI-generated answers.
+                {llmStatus.base_url && (
+                  <span className="block mt-1">
+                    Expected at: <code className="bg-yellow-100 px-1 rounded">{llmStatus.base_url}</code>
+                  </span>
+                )}
+              </p>
+            </div>
+          )}
+          
+          {llmStatus.status === 'not_configured' && (
+            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Info:</strong> No LLM is configured. Responses use extractive summaries 
+                from retrieved document chunks. Configure an LLM for enhanced AI-generated responses.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Search Interface */}
       <div className="card p-6">
         <div className="space-y-4">
+          {/* Search Help Toggle */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-medium text-secondary-900">Search Configuration</h2>
+            <button
+              onClick={() => setShowSearchHelp(!showSearchHelp)}
+              className="flex items-center space-x-2 text-sm text-primary-600 hover:text-primary-700 transition-colors"
+            >
+              <svg className={`h-4 w-4 transition-transform ${showSearchHelp ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+              <span>{showSearchHelp ? 'Hide' : 'Show'} Search Help</span>
+            </button>
+          </div>
+
+          {/* Detailed Search Help */}
+          {showSearchHelp && (
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h3 className="text-sm font-semibold text-blue-900 mb-3">Understanding Search Types</h3>
+              <div className="space-y-4 text-sm">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-3 bg-white rounded border border-blue-100">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                      <h4 className="font-medium text-gray-900">Hybrid Search</h4>
+                    </div>
+                    <p className="text-gray-600 text-xs mb-2">
+                      The most powerful option that combines both semantic and keyword search with advanced reranking.
+                    </p>
+                    <div className="text-xs">
+                      <div className="font-medium text-gray-700 mb-1">How it works:</div>
+                      <ul className="list-disc list-inside space-y-1 text-gray-600">
+                        <li>Runs both searches in parallel</li>
+                        <li>Uses 70% semantic + 30% keyword weighting</li>
+                        <li>Applies reciprocal rank fusion</li>
+                        <li>Uses cross-encoder reranking</li>
+                        <li>Applies MMR diversification</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-white rounded border border-purple-100">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                      <h4 className="font-medium text-gray-900">Semantic Search</h4>
+                    </div>
+                    <p className="text-gray-600 text-xs mb-2">
+                      Uses AI embeddings to understand meaning and find conceptually similar content.
+                    </p>
+                    <div className="text-xs">
+                      <div className="font-medium text-gray-700 mb-1">How it works:</div>
+                      <ul className="list-disc list-inside space-y-1 text-gray-600">
+                        <li>Converts query to vector embeddings</li>
+                        <li>Searches vector database for similar chunks</li>
+                        <li>Applies similarity threshold filtering</li>
+                        <li>Returns results by semantic similarity</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-white rounded border border-orange-100">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                      <h4 className="font-medium text-gray-900">Keyword Search</h4>
+                    </div>
+                    <p className="text-gray-600 text-xs mb-2">
+                      Traditional text matching using the BM25 algorithm for exact word and phrase matching.
+                    </p>
+                    <div className="text-xs">
+                      <div className="font-medium text-gray-700 mb-1">How it works:</div>
+                      <ul className="list-disc list-inside space-y-1 text-gray-600">
+                        <li>Tokenizes query into search terms</li>
+                        <li>Uses LIKE queries to find candidate chunks</li>
+                        <li>Applies BM25 scoring algorithm</li>
+                        <li>Ranks by term frequency and document length</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
+                  <div className="flex items-start space-x-2">
+                    <svg className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    <div className="text-xs text-yellow-800">
+                      <strong>Performance Note:</strong> Hybrid search may take slightly longer as it runs both search methods, 
+                      but provides the most comprehensive and accurate results. For simple queries, semantic search alone 
+                      often provides excellent results with faster response times.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           <div>
             <label htmlFor="query" className="block text-sm font-medium text-secondary-700 mb-2">
               Enter your question
@@ -157,14 +380,18 @@ const Query = () => {
             <div>
               <label className="block text-sm font-medium text-secondary-700 mb-2">
                 Search Type
+                <span className="ml-2 text-xs text-secondary-500 font-normal">
+                  (Click for details)
+                </span>
               </label>
               <select
                 value={searchType}
                 onChange={(e) => setSearchType(e.target.value as any)}
                 className="input"
                 disabled={loading}
+                title={`Current: ${getSearchTypeLabel(searchType)}`}
               >
-                <option value="hybrid">Hybrid</option>
+                <option value="hybrid">Hybrid (Recommended)</option>
                 <option value="semantic">Semantic</option>
                 <option value="keyword">Keyword</option>
               </select>
@@ -188,12 +415,23 @@ const Query = () => {
             <button
               onClick={handleSearch}
               disabled={loading || !query.trim()}
-              className="btn btn-primary"
+              className={`relative overflow-hidden transition-all duration-300 ${
+                loading 
+                  ? 'bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 shadow-lg transform scale-105' 
+                  : 'bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 hover:shadow-lg hover:transform hover:scale-105'
+              } ${
+                !query.trim() || loading 
+                  ? 'opacity-75 cursor-not-allowed' 
+                  : 'opacity-100 cursor-pointer'
+              } px-6 py-3 rounded-lg font-medium text-white flex items-center justify-center min-w-[140px]`}
             >
               {loading ? (
                 <>
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Searching...
+                  <div className="flex items-center">
+                    {loadingMessage?.icon && <loadingMessage.icon className="h-4 w-4 mr-2" />}
+                    <span className="truncate">{loadingMessage?.text || 'Searching...'}</span>
+                  </div>
                 </>
               ) : (
                 <>
@@ -208,7 +446,11 @@ const Query = () => {
                 setQuery('')
                 setSearchResults(null)
               }}
-              className="btn btn-outline"
+              className={`px-6 py-3 rounded-lg font-medium transition-all duration-300 ${
+                loading 
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                  : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 hover:shadow-md'
+              }`}
               disabled={loading}
             >
               Clear
@@ -237,8 +479,52 @@ const Query = () => {
                   <TrendingUp className="h-4 w-4 mr-1" />
                   {getSearchTypeLabel(searchType)}
                 </span>
+                {llmStatus && llmStatus.response_mode === 'extractive_summary' && (
+                  <span className="flex items-center text-orange-600">
+                    <FileText className="h-4 w-4 mr-1" />
+                    Extractive Summary
+                  </span>
+                )}
               </div>
             </div>
+
+            {/* Primary Answer Display */}
+            {searchResults.answer && (
+              <div className="mb-6 p-6 bg-gradient-to-r from-primary-50 to-blue-50 border border-primary-200 rounded-lg">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-semibold text-primary-900">
+                    {llmStatus && llmStatus.response_mode === 'extractive_summary' 
+                      ? 'Document Summary' 
+                      : 'AI Answer'
+                    }
+                  </h4>
+                  <div className="flex items-center space-x-2">
+                    {llmStatus && llmStatus.response_mode === 'llm_generated' && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        AI Generated
+                      </span>
+                    )}
+                    {llmStatus && llmStatus.response_mode === 'extractive_summary' && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        Extractive Summary
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                {llmStatus && llmStatus.response_mode === 'extractive_summary' && (
+                  <p className="text-sm text-primary-600 mb-4">
+                    Summary generated from retrieved document chunks
+                  </p>
+                )}
+                
+                <div className="prose prose-sm max-w-none">
+                  <p className="text-primary-800 whitespace-pre-wrap leading-relaxed">
+                    {searchResults.answer}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Citations and Evidence */}
             {searchResults.citations && searchResults.citations.length > 0 ? (
@@ -247,70 +533,43 @@ const Query = () => {
                 answer={searchResults.answer}
               />
             ) : searchResults.retrieved_chunks && searchResults.retrieved_chunks.length > 0 ? (
-              <EvidenceBlock 
-                evidence={searchResults.retrieved_chunks.map(chunk => ({
-                  id: chunk.chunk.id,
-                  document_id: chunk.document.id,
-                  document_title: chunk.document.metadata?.title || chunk.document.id,
-                  page_number: chunk.chunk.metadata?.page_number,
-                  section_title: chunk.chunk.metadata?.section_title,
-                  chunk_id: chunk.chunk.id,
-                  score: chunk.score,
-                  content: chunk.chunk.content,
-                  metadata: chunk.chunk.metadata,
-                  timestamp: chunk.document.metadata?.created_at,
-                  author: chunk.document.metadata?.author
-                }))}
-                query={query}
-              />
-            ) : (
-              <>
-                {/* Fallback: AI Answer */}
-                {searchResults.answer && (
-                  <div className="mb-6 p-4 bg-primary-50 border border-primary-200 rounded-lg">
-                    <h4 className="font-medium text-primary-900 mb-2">AI Answer</h4>
-                    <p className="text-primary-800 whitespace-pre-wrap">{searchResults.answer}</p>
-                  </div>
-                )}
-
-                {/* Fallback: Retrieved Chunks */}
-                <div className="space-y-4">
-                  {searchResults.retrieved_chunks.map((chunk, index) => (
-                    <div key={chunk.chunk.id} className="border border-secondary-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <h5 className="font-medium text-secondary-900">
-                          Result {index + 1}
-                        </h5>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm text-secondary-600">
-                            Score: {chunk.score.toFixed(3)}
-                          </span>
-                          <span className="text-sm text-secondary-500">
-                            Document: {chunk.document.id}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      <div className="text-sm text-secondary-700 mb-3">
-                        {chunk.chunk.content}
-                      </div>
-
-                      {includeMetadata && chunk.chunk.metadata && Object.keys(chunk.chunk.metadata).length > 0 && (
-                        <details className="text-sm">
-                          <summary className="cursor-pointer text-secondary-600 hover:text-secondary-800">
-                            View Metadata
-                          </summary>
-                          <div className="mt-2 p-3 bg-secondary-50 rounded border">
-                            <pre className="text-xs text-secondary-700 overflow-x-auto">
-                              {JSON.stringify(chunk.chunk.metadata, null, 2)}
-                            </pre>
-                          </div>
-                        </details>
-                      )}
-                    </div>
-                  ))}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-lg font-medium text-secondary-900">Supporting Evidence</h4>
+                  <span className="text-sm text-secondary-600">
+                    {searchResults.retrieved_chunks.length} source{searchResults.retrieved_chunks.length !== 1 ? 's' : ''}
+                  </span>
                 </div>
-              </>
+                
+                <EvidenceBlock 
+                  evidence={searchResults.retrieved_chunks.map(chunk => ({
+                    id: chunk.chunk.id,
+                    document_id: chunk.document.id,
+                    document_title: chunk.document.metadata?.title || chunk.document.id,
+                    page_number: chunk.chunk.metadata?.page_number,
+                    section_title: chunk.chunk.metadata?.section_title,
+                    chunk_id: chunk.chunk.id,
+                    score: chunk.score,
+                    content: chunk.chunk.content,
+                    metadata: chunk.chunk.metadata,
+                    timestamp: chunk.document.metadata?.created_at,
+                    author: chunk.document.metadata?.author
+                  }))}
+                  query={query}
+                />
+              </div>
+            ) : !searchResults.answer && (
+              <div className="text-center py-8">
+                <div className="text-secondary-500 mb-2">
+                  <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                </div>
+                <p className="text-secondary-600">
+                  No relevant information found for your query.
+                </p>
+                <p className="text-sm text-secondary-500 mt-2">
+                  Try rephrasing your question or using different keywords.
+                </p>
+              </div>
             )}
           </div>
         </div>

@@ -285,7 +285,21 @@ async def health_check():
 async def query_documents(request: QueryRequest):
     """Query documents using the RAG system with conversational AI."""
     start_time = time.time()
-    requested_search_type = SearchType.HYBRID  # Initialize default value
+    # Determine requested search type (UI can pass via filters.search_type)
+    requested_search_type = SearchType.HYBRID  # default
+    try:
+        # Prefer explicit request filter, else use configured default
+        requested_type_str = None
+        if isinstance(request.filters, dict):
+            requested_type_str = request.filters.get("search_type")
+        if not requested_type_str:
+            requested_type_str = getattr(settings, "search_type", "hybrid")
+        requested_type_str = str(requested_type_str).lower().strip()
+        if requested_type_str in {"semantic", "keyword", "hybrid"}:
+            requested_search_type = SearchType(requested_type_str)
+    except Exception:
+        # Fallback to default HYBRID if anything goes wrong
+        requested_search_type = SearchType.HYBRID
 
     try:
         logger.info(f"/api/v1/query received: query='{request.query}', max_results={request.max_results}")
@@ -318,13 +332,32 @@ async def query_documents(request: QueryRequest):
         results = []
         if normalized not in trivial_greetings and len(normalized) >= 3:
             # Retrieve results
-            logger.info("Starting retrieval (hybrid)")
+            logger.info(f"Starting retrieval ({requested_search_type.value})")
+            # Determine k (max results)
+            k_value = request.max_results if request.max_results and request.max_results > 0 else settings.retrieval_k
             results = await retriever.retrieve(
-            query=request.query,
-            k=request.max_results,
-            search_type=requested_search_type,
-            filters=request.filters or None
+                query=request.query,
+                k=k_value,
+                search_type=requested_search_type,
+                filters=request.filters or None
             )
+            # Fallback strategy: if no results, try semantic then keyword
+            if not results and requested_search_type == SearchType.HYBRID:
+                logger.info("Hybrid returned 0 results; retrying with semantic-only")
+                results = await retriever.retrieve(
+                    query=request.query,
+                    k=k_value,
+                    search_type=SearchType.SEMANTIC,
+                    filters={k: v for k, v in (request.filters or {}).items() if k != "search_type"}
+                )
+                if not results:
+                    logger.info("Semantic returned 0 results; retrying with keyword-only")
+                    results = await retriever.retrieve(
+                        query=request.query,
+                        k=k_value,
+                        search_type=SearchType.KEYWORD,
+                        filters={k: v for k, v in (request.filters or {}).items() if k != "search_type"}
+                    )
             logger.info(f"Retrieval complete: results_count={len(results)}")
 
         # Build retrieved_chunks by joining with DB models and truncating content for UI
@@ -581,9 +614,67 @@ async def get_detailed_health():
     except Exception as e:
         monitoring_health["cache"] = f"error: {str(e)}"
 
+    return {
+        **health.dict(),
+        "monitoring": monitoring_health
+    }
+
+
+@app.get("/api/v1/llm/status")
+async def get_llm_status():
+    """Check LLM availability and configuration status."""
+    try:
+        llm_status = {
+            "openai_configured": False,
+            "local_llm_configured": False,
+            "local_llm_available": False,
+            "response_mode": "extractive_summary",
+            "llm_model": None,
+            "base_url": None
+        }
+        
+        # Check OpenAI configuration
+        if settings.openai_api_key and settings.openai_api_key != "your_openai_api_key_here":
+            llm_status["openai_configured"] = True
+            llm_status["response_mode"] = "llm_generated"
+            llm_status["llm_model"] = settings.default_llm_model
+        
+        # Check local LLM configuration
+        if settings.use_local_llm and settings.local_llm_base_url:
+            llm_status["local_llm_configured"] = True
+            llm_status["llm_model"] = settings.local_llm_model or settings.default_llm_model
+            llm_status["base_url"] = settings.local_llm_base_url
+            
+            # Test if local LLM is actually running
+            import aiohttp
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        settings.local_llm_base_url + "/models", 
+                        timeout=aiohttp.ClientTimeout(total=3)
+                    ) as resp:
+                        if resp.status == 200:
+                            llm_status["local_llm_available"] = True
+                            llm_status["response_mode"] = "llm_generated"
+            except Exception:
+                llm_status["local_llm_available"] = False
+        
+        # Determine overall status
+        if llm_status["openai_configured"] or llm_status["local_llm_available"]:
+            llm_status["status"] = "available"
+        elif llm_status["local_llm_configured"]:
+            llm_status["status"] = "configured_but_unavailable"
+        else:
+            llm_status["status"] = "not_configured"
+            
+        return llm_status
+        
+    except Exception as e:
+        logger.error(f"Error checking LLM status: {e}")
         return {
-            **health.dict(),
-            "monitoring": monitoring_health
+            "status": "error",
+            "error": str(e),
+            "response_mode": "extractive_summary"
         }
 
 @app.get("/api/v1/performance/report")
