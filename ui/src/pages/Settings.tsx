@@ -12,6 +12,7 @@ import {
 import { adminService, SystemStats, HealthCheck } from '../services/adminService'
 import { documentService } from '../services/documentService'
 import SystemStatus from '../components/SystemStatus'
+import { ModelSelector } from '../components/ModelSelector'
 import toast from 'react-hot-toast'
 
 const Settings = () => {
@@ -126,6 +127,16 @@ const Settings = () => {
           Configure and manage your Enterprise RAG System
         </p>
       </div>
+
+      {/* Model Selection */}
+      <ModelSelector 
+        onModelChange={(model) => {
+          console.log('Model changed to:', model);
+          // Optionally refresh system data after model change
+          fetchSystemData();
+        }}
+        className="mb-6"
+      />
 
       {/* System Status */}
       <div className="card p-6">

@@ -34,12 +34,14 @@ from src.core.monitoring import monitoring_service
 from src.core.models import HealthCheck, QueryResponse, QueryRequest, RetrievedChunk, ChunkResponse, DocumentResponse, ChunkModel, DocumentModel, QueryIntent
 from src.services.conversational_ai import conversational_ai
 from src.services.performance_optimizer import performance_monitor
-from src.services.retrieval_service import SearchType
+from src.services.retrieval_service import SearchType, SearchResult
 from src.services.retrieval_service import KeywordSearcher, HybridRetriever
+from src.services.enhanced_retrieval_service import EnhancedRetriever
 from src.services.embedding_service import EmbeddingService
 from src.services.document_processor import DocumentProcessor
+from src.services.multimodal_document_processor import multimodal_document_processor
 from src.services.confidence_calibrator import confidence_calibrator
-from src.api.routes import documents, queries, admin, evaluation, metrics
+from src.api.routes import documents, queries, admin, evaluation, metrics, docs
 
 logger = logging.getLogger(__name__)
 
@@ -153,8 +155,9 @@ async def lifespan(app: FastAPI):
         # File watching disabled - documents are only uploaded through the UI
         logger.info("File watching disabled - using manual upload only")
 
-        # Retriever
+        # Enhanced Retriever (supports structured data)
         app.state.retriever = HybridRetriever(embedding_service)
+        app.state.enhanced_retriever = EnhancedRetriever(embedding_service)
 
         # Auto-populate vectors if empty
         await _auto_populate_vectors(embedding_service)
@@ -231,6 +234,7 @@ app.include_router(queries.router, prefix="/api/v1/queries", tags=["queries"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 app.include_router(evaluation.router, prefix="/api/v1/evaluation", tags=["evaluation"])
 app.include_router(metrics.router, prefix="/api/v1/metrics", tags=["metrics"])
+app.include_router(docs.router, tags=["documentation"])
 
 
 @app.get("/", response_model=Dict[str, str])
@@ -303,16 +307,16 @@ async def query_documents(request: QueryRequest):
 
     try:
         logger.info(f"/api/v1/query received: query='{request.query}', max_results={request.max_results}")
-        # Ensure retriever is available
-        retriever = getattr(app.state, "retriever", None)
-        if retriever is None:
+        # Ensure enhanced retriever is available
+        enhanced_retriever = getattr(app.state, "enhanced_retriever", None)
+        if enhanced_retriever is None:
             embedding_service = getattr(app.state, "embedding_service", None)
             if embedding_service is None:
                 embedding_service = EmbeddingService()
                 await embedding_service.initialize()
                 app.state.embedding_service = embedding_service
-            retriever = HybridRetriever(embedding_service)
-            app.state.retriever = retriever
+            enhanced_retriever = EnhancedRetriever(embedding_service)
+            app.state.enhanced_retriever = enhanced_retriever
 
         # Trivial greeting guardrail: return a friendly response without retrieval
         normalized = request.query.strip().lower()
@@ -331,39 +335,53 @@ async def query_documents(request: QueryRequest):
 
         results = []
         if normalized not in trivial_greetings and len(normalized) >= 3:
-            # Retrieve results
-            logger.info(f"Starting retrieval ({requested_search_type.value})")
-            # Determine k (max results)
-            k_value = request.max_results if request.max_results and request.max_results > 0 else settings.retrieval_k
-            results = await retriever.retrieve(
+            # Retrieve results with enhanced retrieval (text + structured data)
+            logger.info(f"Starting enhanced retrieval ({requested_search_type.value})")
+            # Determine k (max results) dynamically based on query characteristics
+            base_k = settings.retrieval_k  # Now defaults to 100
+            word_count = len(normalized.split())
+            is_numeric_q = bool(re.search(r"\b(how many|how much|number of|count of|percentage|percent|total)\b", normalized))
+            # Increase recall for longer/analytical or numeric queries
+            if word_count >= 16:
+                base_k = max(base_k, 150)  # Very high for complex queries
+            elif word_count >= 8:
+                base_k = max(base_k, 120)  # High for medium queries
+            if is_numeric_q:
+                base_k = max(base_k, 140)  # Very high for numeric queries
+            user_k = request.max_results if request.max_results and request.max_results > 0 else None
+            k_value = max(min(user_k or base_k, 200), 10)  # Cap at 200, minimum 10
+            text_results, structured_results = await enhanced_retriever.retrieve_enhanced(
                 query=request.query,
                 k=k_value,
                 search_type=requested_search_type,
-                filters=request.filters or None
+                filters=request.filters or None,
+                include_structured_data=True
             )
-            # Fallback strategy: if no results, try semantic then keyword
-            if not results and requested_search_type == SearchType.HYBRID:
-                logger.info("Hybrid returned 0 results; retrying with semantic-only")
-                results = await retriever.retrieve(
+            # Fallback strategy: if no text results, try semantic then keyword
+            if not text_results and requested_search_type == SearchType.HYBRID:
+                logger.info("Hybrid returned 0 text results; retrying with semantic-only")
+                text_results, _ = await enhanced_retriever.retrieve_enhanced(
                     query=request.query,
                     k=k_value,
                     search_type=SearchType.SEMANTIC,
-                    filters={k: v for k, v in (request.filters or {}).items() if k != "search_type"}
+                    filters={k: v for k, v in (request.filters or {}).items() if k != "search_type"},
+                    include_structured_data=True
                 )
-                if not results:
-                    logger.info("Semantic returned 0 results; retrying with keyword-only")
-                    results = await retriever.retrieve(
+                if not text_results:
+                    logger.info("Semantic returned 0 text results; retrying with keyword-only")
+                    text_results, _ = await enhanced_retriever.retrieve_enhanced(
                         query=request.query,
                         k=k_value,
                         search_type=SearchType.KEYWORD,
-                        filters={k: v for k, v in (request.filters or {}).items() if k != "search_type"}
+                        filters={k: v for k, v in (request.filters or {}).items() if k != "search_type"},
+                        include_structured_data=True
                     )
-            logger.info(f"Retrieval complete: results_count={len(results)}")
+            logger.info(f"Enhanced retrieval complete: text_results={len(text_results)}, structured_results={len(structured_results)}")
 
         # Build retrieved_chunks by joining with DB models and truncating content for UI
         retrieved_chunks: List[RetrievedChunk] = []
         async with get_db_session() as session:
-            for res in results:
+            for res in text_results:
                 db_row = await session.execute(
                     select(ChunkModel, DocumentModel)
                     .join(DocumentModel, ChunkModel.document_id == DocumentModel.id)
@@ -410,13 +428,48 @@ async def query_documents(request: QueryRequest):
                     )
                 )
 
-        # Generate answer
-        answer = await generate_answer(request.query, results)
+        # Numeric strict path: try to answer "how many ... in YEAR" from structured data
+        strict_numeric_answer: Optional[str] = None
+        year_match = re.search(r"\b(20\d{2}|19\d{2})\b", normalized)
+        is_how_many = bool(re.search(r"\b(how many|number of|count of)\b", normalized))
+        if is_how_many and year_match and structured_results:
+            target_year = year_match.group(1)
+            # Look for numeric structured entries related to operations in the target year
+            for s in structured_results:
+                data = s.get("data", {}) or {}
+                text_repr = data.get("text_representation", "")
+                if target_year in text_repr.lower() or target_year in (s.get("metadata", {}) or {}).get("text", "").lower():
+                    # Extract first plausible integer
+                    m = re.search(r"\b(\d{1,6})\b", text_repr)
+                    if m:
+                        strict_numeric_answer = m.group(1)
+                        break
+
+        # Generate answer (LLM/extractive), preferring numeric strict answer when present
+        answer = await generate_answer_enhanced(request.query, text_results, structured_results)
+        if strict_numeric_answer:
+            # Prepend a concise numeric statement and keep the rest as supporting context
+            answer = f"{strict_numeric_answer} [Source 1]\n\n" + answer
+
+        # Build citations from top retrieved chunks (limit 3)
+        citations: List[Dict[str, Any]] = []
+        for rc in retrieved_chunks[:3]:
+            citations.append({
+                "id": rc.chunk.id,
+                "document_id": rc.document.id,
+                "document_title": (rc.document.metadata or {}).get("title") if rc.document.metadata else rc.document.id,
+                "page_number": (rc.chunk.metadata or {}).get("page_number") if rc.chunk.metadata else None,
+                "section_title": (rc.chunk.metadata or {}).get("section_title") if rc.chunk.metadata else None,
+                "chunk_id": rc.chunk.id,
+                "score": rc.score,
+                "content": rc.chunk.content,
+                "metadata": rc.chunk.metadata or {}
+            })
 
         # Calibrate confidence and check no-answer threshold
-        top_k_scores = [r.score for r in results[:5]] if results else []
+        top_k_scores = [r.score for r in text_results[:5]] if text_results else []
         confidence_score = confidence_calibrator.calibrate_confidence(
-            request.query, results, answer, top_k_scores
+            request.query, text_results, answer, top_k_scores
         )
 
         # Apply no-answer threshold
@@ -432,7 +485,8 @@ async def query_documents(request: QueryRequest):
             retrieved_chunks=retrieved_chunks,
             response_time=response_time,
             intent=QueryIntent.FACTUAL,
-            confidence=confidence_score.calibrated_score
+            confidence=confidence_score.calibrated_score,
+            citations=citations
         )
 
     except Exception as e:
@@ -517,6 +571,11 @@ async def generate_answer(query: str, search_results: List) -> str:
                 client_kwargs["base_url"] = settings.local_llm_base_url.rstrip("/")
 
             client = AsyncOpenAI(**client_kwargs)
+            # Add numeric QA guidance for count/how many questions
+            numeric_hint = """
+If the question asks for a count or number (e.g., "how many", "number of"), extract the exact number from the sources. If multiple numbers exist, prefer the most recent and clearly labeled figure. If uncertain, answer with the best supported range and cite.
+""".strip()
+
             system_rules = (
                 "You are a precise, grounded assistant.\n"
                 "Rules:\n"
@@ -524,6 +583,7 @@ async def generate_answer(query: str, search_results: List) -> str:
                 "- If evidence is insufficient, say you don't know.\n"
                 "- Cite sources inline as [Source N].\n"
                 "- Be concise, factual, and avoid speculation.\n"
+                f"\n{numeric_hint}"
             )
 
             user_prompt = (
@@ -534,18 +594,21 @@ async def generate_answer(query: str, search_results: List) -> str:
 
             # Add timeout to prevent hanging when LLM is not available
             try:
-                completion = await asyncio.wait_for(
-                    client.chat.completions.create(
-                        model=(settings.local_llm_model or settings.default_llm_model) if settings.use_local_llm else settings.default_llm_model,
-                        messages=[
-                            {"role": "system", "content": system_rules},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        temperature=0.1,  # Lower temperature for more focused answers
-                        max_tokens=getattr(settings, 'llm_response_max_tokens', 400),   # Use configured max tokens
-                    ),
-                    timeout=settings.llm_timeout  # Use configured LLM timeout
-                )
+                create_kwargs = {
+                    "model": (settings.local_llm_model or settings.default_llm_model) if settings.use_local_llm else settings.default_llm_model,
+                    "messages": [
+                        {"role": "system", "content": system_rules},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": getattr(settings, 'llm_temperature', 0.1),
+                }
+                if getattr(settings, 'llm_response_max_tokens', 0) and settings.llm_response_max_tokens > 0:
+                    create_kwargs["max_tokens"] = settings.llm_response_max_tokens
+                create_call = client.chat.completions.create(**create_kwargs)
+                if settings.llm_timeout and settings.llm_timeout > 0:
+                    completion = await asyncio.wait_for(create_call, timeout=settings.llm_timeout)
+                else:
+                    completion = await create_call
             except asyncio.TimeoutError:
                 logger.warning("LLM request timed out after 5 seconds, falling back to extractive summary")
                 raise Exception("LLM timeout")
@@ -571,6 +634,210 @@ async def generate_answer(query: str, search_results: List) -> str:
         if key_sentences:
             summary = '. '.join(key_sentences[:3]) + '.'
             return f"Based on the available sources: {summary}"
+    
+    return "I found some relevant information, but it may not directly answer your specific question. Please try rephrasing your query or ask for more specific details."
+
+
+async def generate_answer_enhanced(query: str, text_results: List[SearchResult], structured_results: List[Dict[str, Any]]) -> str:
+    """Generate an enhanced answer using both text and structured data sources."""
+    
+    if not text_results and not structured_results:
+        return "I don't have enough information to answer your question based on the available sources."
+    
+    # Build context from text results
+    context_blocks = []
+    for i, result in enumerate(text_results[:5], 1):
+        # Use the content directly
+        content = result.content
+        context_blocks.append(f"[Source {i}] {content}")
+    
+    # Build context from structured data
+    structured_context = []
+    for i, struct_data in enumerate(structured_results[:3], 1):
+        content_type = struct_data.get("content_type", "data")
+        data = struct_data.get("data", {})
+        
+        if content_type == "table":
+            # Add table summary
+            table_text = data.get("text_representation", "")
+            if table_text:
+                structured_context.append(f"[Table Data {i}] {table_text}")
+        
+        elif content_type == "chart":
+            # Add chart summary
+            chart_text = data.get("text_representation", "")
+            if chart_text:
+                structured_context.append(f"[Chart Data {i}] {chart_text}")
+        
+        elif content_type == "numeric":
+            # Add numeric data
+            numeric_data = data
+            value = numeric_data.get("value")
+            original_text = numeric_data.get("original_text", "")
+            context = numeric_data.get("context", {})
+            
+            if value and original_text:
+                context_info = ""
+                if context.get("headers"):
+                    context_info = f" (from table columns: {', '.join(context['headers'])})"
+                structured_context.append(f"[Numeric Data {i}] {original_text}{context_info}")
+    
+    # Combine all context
+    all_context = context_blocks + structured_context
+    context_text = "\n\n".join(all_context)
+
+    # Lightweight verification helper: keep only sentences supported by context
+    def _verify_and_prune(answer_text: str, context_text: str) -> str:
+        try:
+            if not answer_text:
+                return answer_text
+            ctx_lower = context_text.lower()
+            sentences = re.split(r"(?<=[.!?])\s+", answer_text)
+            kept = []
+            for s in sentences:
+                s_clean = s.strip()
+                if not s_clean:
+                    continue
+                # Keep sentence if key tokens appear in context
+                tokens = [t for t in re.findall(r"[a-z0-9%]+", s_clean.lower()) if len(t) > 3]
+                if not tokens:
+                    continue
+                overlap = sum(1 for t in tokens if t in ctx_lower)
+                if overlap >= max(2, len(tokens)//6):
+                    kept.append(s_clean)
+            if kept:
+                return " ".join(kept)
+            return answer_text
+        except Exception:
+            return answer_text
+    
+    # Check if we should use LLM or fallback to extractive summary
+    if not settings.use_local_llm or not settings.local_llm_base_url:
+        # Fallback to extractive summary
+        return await _extractive_summary_with_structured_data(query, text_results, structured_results)
+    
+    try:
+        from openai import AsyncOpenAI
+        
+        # Use LLM with enhanced context
+        api_key = settings.openai_api_key or "sk-local-placeholder"
+        client_kwargs = {"api_key": api_key}
+        if settings.use_local_llm and settings.local_llm_base_url:
+            client_kwargs["base_url"] = settings.local_llm_base_url.rstrip("/")
+
+        client = AsyncOpenAI(**client_kwargs)
+        
+        # Enhanced system rules for multimodal data
+        system_rules = (
+            "You are a precise, grounded assistant that can analyze both text and structured data (tables, charts, numeric values).\n"
+            "Rules:\n"
+            "- Use ONLY the provided sources for facts.\n"
+            "- Pay special attention to numeric data from tables and charts.\n"
+            "- If the question asks for specific numbers, extract them from structured data sources.\n"
+            "- If evidence is insufficient, say you don't know.\n"
+            "- Cite sources inline as [Source N], [Table Data N], [Chart Data N], or [Numeric Data N].\n"
+            "- Be concise, factual, and avoid speculation.\n"
+            "- For numeric queries, prefer exact values from structured data over text descriptions."
+        )
+
+        user_prompt = (
+            f"Question: {query}\n\n"
+            "Sources (use appropriate citations):\n"
+            f"{context_text}"
+        )
+
+        # Add timeout to prevent hanging
+        try:
+            create_kwargs = {
+                "model": settings.local_llm_model or "llama3.1:70b",
+                "messages": [
+                    {"role": "system", "content": system_rules},
+                    {"role": "user", "content": user_prompt}
+                ],
+                "temperature": settings.llm_temperature,
+            }
+            if getattr(settings, 'llm_response_max_tokens', 0) and settings.llm_response_max_tokens > 0:
+                create_kwargs["max_tokens"] = settings.llm_response_max_tokens
+            create_call = client.chat.completions.create(**create_kwargs)
+            if settings.llm_timeout and settings.llm_timeout > 0:
+                completion = await asyncio.wait_for(create_call, timeout=settings.llm_timeout)
+            else:
+                completion = await create_call
+            
+            answer = completion.choices[0].message.content.strip()
+            # Verification pass: prune unsupported sentences
+            verified = _verify_and_prune(answer, context_text)
+            return verified
+            
+        except asyncio.TimeoutError:
+            logger.warning("LLM request timed out, falling back to extractive summary")
+            return await _extractive_summary_with_structured_data(query, text_results, structured_results)
+            
+    except Exception as e:
+        logger.warning(f"LLM generation failed: {e}, falling back to extractive summary")
+        return await _extractive_summary_with_structured_data(query, text_results, structured_results)
+
+
+async def _extractive_summary_with_structured_data(query: str, text_results: List[SearchResult], structured_results: List[Dict[str, Any]]) -> str:
+    """Create an extractive summary using both text and structured data."""
+    
+    if not text_results and not structured_results:
+        return "I don't have enough information to answer your question."
+    
+    # Extract key information from text results with simple relevance scoring
+    key_sentences: List[str] = []
+    query_words = [word.lower() for word in re.findall(r"[a-zA-Z0-9%]+", query) if len(word) > 2]
+    
+    for result in text_results[:10]:
+        content = (result.content or "").strip()
+        if not content:
+            continue
+        # Split on sentence boundaries
+        sentences = re.split(r"(?<=[.!?])\s+", content)
+        # Score sentences by overlap with query words
+        scored = []
+        for s in sentences:
+            s_lower = s.lower()
+            score = sum(1 for w in query_words if w in s_lower)
+            if score > 0:
+                scored.append((score, s.strip()))
+        # Keep top 2 per chunk
+        scored.sort(key=lambda x: x[0], reverse=True)
+        key_sentences.extend([s for _, s in scored[:2]])
+    
+    # Extract key information from structured data
+    structured_info = []
+    for struct_data in structured_results:
+        content_type = struct_data.get("content_type", "data")
+        data = struct_data.get("data", {})
+        
+        if content_type == "table":
+            table_text = data.get("text_representation", "")
+            if table_text:
+                structured_info.append(f"Table data: {table_text}")
+        
+        elif content_type == "chart":
+            chart_text = data.get("text_representation", "")
+            if chart_text:
+                structured_info.append(f"Chart data: {chart_text}")
+        
+        elif content_type == "numeric":
+            numeric_data = data
+            value = numeric_data.get("value")
+            original_text = numeric_data.get("original_text", "")
+            if value and original_text:
+                structured_info.append(f"Numeric data: {original_text}")
+    
+    # Combine all information
+    # Prioritize structured numeric info for numeric queries
+    is_numeric_query = any(kw in query.lower() for kw in ["how many", "how much", "number of", "count", "%", "percentage", "total"])
+    all_info = (structured_info + key_sentences) if is_numeric_query else (key_sentences + structured_info)
+    
+    if all_info:
+        summary = '. '.join(all_info[:6])
+        if not summary.endswith(('.', '!', '?')):
+            summary += '.'
+        return f"Based on the available sources: {summary}"
     
     return "I found some relevant information, but it may not directly answer your specific question. Please try rephrasing your query or ask for more specific details."
 

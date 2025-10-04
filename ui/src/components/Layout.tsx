@@ -8,7 +8,8 @@ import {
   Settings,
   Menu,
   X,
-  Activity
+  Activity,
+  BookOpen
 } from 'lucide-react'
 import SystemStatus from './SystemStatus'
 import IFRCLogo from './IFRCLogo'
@@ -28,6 +29,7 @@ const Layout = ({ children }: LayoutProps) => {
     { name: 'Query', href: '/query', icon: Search },
     { name: 'Analytics', href: '/analytics', icon: BarChart3 },
     { name: 'Monitoring', href: '/monitoring', icon: Activity },
+    { name: 'Methodology', href: '/methodology', icon: BookOpen },
     { name: 'Settings', href: '/settings', icon: Settings },
   ]
 

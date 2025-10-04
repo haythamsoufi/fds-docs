@@ -59,6 +59,8 @@ Context Packing → LLM → Confidence Calibration → Response
 - **Context Packing**: Concise, source-labeled context blocks
 - **Confidence Calibration**: No-answer threshold and confidence scoring
 - **Refusal Rules**: Explicit handling of low-confidence queries
+- **Citation Generation**: Automatic citation extraction from retrieved chunks
+- **Numeric Answer Path**: Strict numeric responses for year-based count queries
 
 ## Upgrade Components
 
@@ -99,6 +101,8 @@ Context Packing → LLM → Confidence Calibration → Response
    - Context packing with source labels
    - Confidence calibration and no-answer thresholds
    - Refusal rules for low-confidence responses
+   - Citation generation from top retrieved chunks
+   - Numeric answer enhancement for year-based queries
 
 7. **Performance Optimizations**
    - Query embedding caching with TTL
@@ -126,6 +130,18 @@ Context Packing → LLM → Confidence Calibration → Response
     - Expandable evidence blocks
     - Query highlighting
     - Relevance scoring visualization
+
+12. **Citation System**
+    - Automatic citation generation from retrieved chunks
+    - Source-backed answers with document metadata
+    - Citation display in UI with page numbers and sections
+    - Confidence scoring with citation coverage
+
+13. **Numeric Answer Enhancement**
+    - Strict numeric-answer path for year-based count queries
+    - Structured data integration for precise numeric responses
+    - Year-aware numeric extraction from tables and charts
+    - Enhanced confidence scoring for numeric answers
 
 ### 🔄 Pending Features
 

@@ -32,11 +32,25 @@ const Query = () => {
   const [queryHistory, setQueryHistory] = useState<QueryHistory[]>([])
   const [loading, setLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState<{ icon: any, text: string } | null>(null)
-  const [maxResults, setMaxResults] = useState(3)
+  const [maxResults, setMaxResults] = useState(10)
   const [searchType, setSearchType] = useState<'hybrid' | 'semantic' | 'keyword'>('hybrid')
   const [includeMetadata, setIncludeMetadata] = useState(true)
   const [llmStatus, setLlmStatus] = useState<LLMStatus | null>(null)
   const [showSearchHelp, setShowSearchHelp] = useState(false)
+  
+  // Suggested questions
+  const suggestedQuestions = [
+    "In 2024, how many emergency operations were active in Syria?",
+    "What are the key priorities for 2025?",
+    "Summarize the financial outlook and budget allocation",
+    "What emergency response procedures should be followed?",
+    "Compare disaster preparedness across different regions",
+    "What are the main challenges facing humanitarian aid?",
+    "How has climate change affected emergency operations?",
+    "What training programs are available for volunteers?",
+    "What partnerships exist with local organizations?",
+    "What are the success metrics for emergency responses?"
+  ]
 
   // Fun loading messages with SVG icons
   const loadingMessages = [
@@ -347,6 +361,27 @@ const Query = () => {
             <label htmlFor="query" className="block text-sm font-medium text-secondary-700 mb-2">
               Enter your question
             </label>
+            {/* Suggested Questions */}
+            <div className="mb-3">
+              <div className="flex flex-wrap gap-2">
+                {suggestedQuestions.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    onClick={() => setQuery(q)}
+                    className={`px-3 py-1 rounded-full text-xs border transition-colors ${
+                      loading
+                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                        : 'bg-white text-secondary-700 border-secondary-200 hover:border-secondary-300 hover:bg-secondary-50'
+                    }`}
+                    disabled={loading}
+                    title="Click to use this question"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
             <textarea
               id="query"
               value={query}

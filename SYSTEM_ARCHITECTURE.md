@@ -59,7 +59,8 @@ Structural Metadata → Embeddings → Vector Store
 
 ```
 Query → Embedding → Hybrid Search (Semantic + BM25) → Cross-encoder Reranking → 
-MMR Diversification → Context Packing → LLM Generation → Confidence Calibration → Response
+MMR Diversification → Context Packing → LLM Generation → Citation Generation → 
+Numeric Answer Enhancement → Confidence Calibration → Response
 ```
 
 ### Key Components:

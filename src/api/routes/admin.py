@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from src.core.database import get_db
 from src.core.cache import cache
 from src.core.config import settings
+from src.core.models import DocumentModel, ChunkModel
 
 router = APIRouter()
 
@@ -39,6 +40,17 @@ class CacheControlRequest(BaseModel):
     action: str = "clear"  # clear, stats, invalidate_pattern
     pattern: str | None = None
     version: int | None = None
+
+
+class ModelSwitchRequest(BaseModel):
+    model: str
+
+
+class ModelStatusResponse(BaseModel):
+    current_model: str
+    available_models: list[str]
+    status: str
+    memory_usage: str | None = None
 
 
 @router.post("/reembed", response_model=PopulateVectorsResponse)
@@ -566,3 +578,111 @@ async def _get_cache_stats(cache_type: str) -> Dict[str, Any]:
             }
     except Exception as e:
         return {"hit_rate": 0.0, "total_keys": 0, "available": False, "error": str(e)}
+
+
+@router.get("/models", response_model=ModelStatusResponse)
+async def get_model_status() -> ModelStatusResponse:
+    """Get current model status and available models."""
+    try:
+        import subprocess
+        import json
+        
+        # Get available models from Ollama
+        result = subprocess.run(
+            ["docker", "compose", "exec", "-T", "llama", "ollama", "list"],
+            capture_output=True,
+            text=True,
+            cwd="C:/FDS Docs"
+        )
+        
+        available_models = []
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')[1:]  # Skip header
+            for line in lines:
+                if line.strip():
+                    model_name = line.split()[0]
+                    available_models.append(model_name)
+        
+        # Get current model from settings
+        current_model = settings.local_llm_model or "llama3.1:8b"
+        
+        # Get memory usage
+        memory_usage = None
+        try:
+            stats_result = subprocess.run(
+                ["docker", "stats", "--no-stream", "--format", "{{.MemUsage}}"],
+                capture_output=True,
+                text=True
+            )
+            if stats_result.returncode == 0:
+                memory_usage = stats_result.stdout.strip()
+        except:
+            pass
+        
+        return ModelStatusResponse(
+            current_model=current_model,
+            available_models=available_models,
+            status="available",
+            memory_usage=memory_usage
+        )
+    except Exception as e:
+        return ModelStatusResponse(
+            current_model="unknown",
+            available_models=[],
+            status="error",
+            memory_usage=None
+        )
+
+
+@router.post("/models/switch", response_model=dict)
+async def switch_model(request: ModelSwitchRequest) -> dict:
+    """Switch to a different Llama model."""
+    try:
+        import subprocess
+        
+        # Validate model exists
+        result = subprocess.run(
+            ["docker", "compose", "exec", "-T", "llama", "ollama", "list"],
+            capture_output=True,
+            text=True,
+            cwd="C:/FDS Docs"
+        )
+        
+        if result.returncode != 0:
+            raise HTTPException(status_code=500, detail="Failed to check available models")
+        
+        available_models = []
+        lines = result.stdout.strip().split('\n')[1:]  # Skip header
+        for line in lines:
+            if line.strip():
+                model_name = line.split()[0]
+                available_models.append(model_name)
+        
+        if request.model not in available_models:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Model '{request.model}' not available. Available models: {available_models}"
+            )
+        
+        # Update .env file
+        env_content = f"""LOCAL_LLM_BASE_URL=http://localhost:8090/v1
+LOCAL_LLM_MODEL={request.model}
+USE_LOCAL_LLM=true
+"""
+        
+        with open("C:/FDS Docs/.env", "w") as f:
+            f.write(env_content)
+        
+        # Update settings
+        settings.local_llm_model = request.model
+        
+        return {
+            "message": f"Model switched to {request.model}",
+            "current_model": request.model,
+            "restart_required": True
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to switch model: {str(e)}")

@@ -104,22 +104,24 @@ class Settings(BaseSettings):
     local_llm_base_url: Optional[str] = Field(default=None, env="LOCAL_LLM_BASE_URL")
     local_llm_model: Optional[str] = Field(default=None, env="LOCAL_LLM_MODEL")
     # LLM Response Configuration
-    llm_response_max_tokens: int = Field(default=400, env="LLM_RESPONSE_MAX_TOKENS")  # Reduced from 500 to 400
+    # 0 = unlimited (do not send max_tokens to the API)
+    llm_response_max_tokens: int = Field(default=0, env="LLM_RESPONSE_MAX_TOKENS")
     llm_temperature: float = Field(default=0.1, env="LLM_TEMPERATURE")
-    llm_timeout: float = Field(default=90.0, env="LLM_TIMEOUT")
+    llm_timeout: float = Field(default=0.0, env="LLM_TIMEOUT")
     
     # Token Management Configuration
     max_input_tokens: int = Field(default=512, env="MAX_INPUT_TOKENS")  # Model input token limit
     max_context_tokens: int = Field(default=400, env="MAX_CONTEXT_TOKENS")  # Context window for processing
     
     # Retrieval Configuration
-    retrieval_k: int = Field(default=5, env="RETRIEVAL_K")
-    rerank_top_k: int = Field(default=10, env="RERANK_TOP_K")
-    similarity_threshold: float = Field(default=0.3, env="SIMILARITY_THRESHOLD")
+    retrieval_k: int = Field(default=100, env="RETRIEVAL_K")
+    rerank_top_k: int = Field(default=32, env="RERANK_TOP_K")
+    similarity_threshold: float = Field(default=0.0, env="SIMILARITY_THRESHOLD")
     cross_encoder_model: str = Field(
         default="cross-encoder/ms-marco-MiniLM-L-6-v2",
         env="CROSS_ENCODER_MODEL"
     )
+    # Enable cross-encoder reranking for higher-quality results (can be disabled via env)
     use_cross_encoder: bool = Field(default=True, env="USE_CROSS_ENCODER")
     # Confidence and no-answer thresholds
     no_answer_threshold: float = Field(default=0.3, env="NO_ANSWER_THRESHOLD")

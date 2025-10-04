@@ -178,8 +178,8 @@ class KeywordSearcher:
             if filters:
                 base_query = self._apply_filters(base_query, filters)
                 
-            # Fetch a larger candidate pool, then rank with BM25
-            candidate_limit = max(200, k * 25)
+            # Fetch a larger candidate pool, then rank with BM25 (more recall for numeric queries)
+            candidate_limit = max(300, k * 40)
             result = await session.execute(base_query.limit(candidate_limit))
             rows = result.all()
             if not rows:
@@ -312,7 +312,8 @@ class SemanticSearcher:
         """Perform semantic search."""
         # Use vector store to find similar chunks
         logger.info(f"Semantic search: query='{query}', k={k}")
-        vector_results = await self.vector_store.search(query, k=k*2, filters=filters)
+        # Expand candidate pool for better recall on CPU-only setups (accept higher latency)
+        vector_results = await self.vector_store.search(query, k=k*3, filters=filters)
         logger.info(f"Semantic search: raw_candidates={len(vector_results)}")
 
         # Apply similarity threshold to filter weak matches with safe fallback
@@ -446,11 +447,11 @@ class HybridRetriever:
         
         # Run both searches in parallel
         semantic_task = self.semantic_searcher.search(
-            processed_query['original_query'], k=k*2, filters=filters
+            processed_query['original_query'], k=k*3, filters=filters
         )
         keyword_task = self.keyword_searcher.search(
             processed_query['processed_query'], 
-            k=k*2, 
+            k=k*3, 
             filters=filters
         )
         
@@ -469,8 +470,9 @@ class HybridRetriever:
         combined_results = self._combine_results(
             semantic_results, 
             keyword_results, 
-            semantic_weight=0.7,
-            keyword_weight=0.3
+            # Favor semantic relevance more for English-only corpora
+            semantic_weight=0.8,
+            keyword_weight=0.2
         )
         
         # Apply reciprocal rank fusion
@@ -479,8 +481,10 @@ class HybridRetriever:
         # Optional cross-encoder reranking over top-N
         reranked = await self._maybe_rerank(processed_query['original_query'], fused_results)
 
-        # Apply MMR diversification on the reranked list
-        diversified = self._mmr_select(reranked, k)
+        # Apply MMR diversification; for numeric/count queries, bias toward relevance
+        is_numeric_q = bool(re.search(r"\b(how many|how much|number of|count of)\b", processed_query['original_query'].lower()))
+        lambda_balance = 0.9 if is_numeric_q else None
+        diversified = self._mmr_select(reranked, k, lambda_balance=lambda_balance)
         return diversified
 
     async def _maybe_rerank(self, query: str, candidates: List[SearchResult]) -> List[SearchResult]:

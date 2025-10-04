@@ -32,16 +32,18 @@ services:
   #     retries: 3
   #   restart: unless-stopped
 
-  # Local LLM: llama.cpp server (OpenAI-compatible API)
+  # Local LLM: Ollama with large model (OpenAI-compatible API)
   llama:
     image: ollama/ollama:latest
     ports:
       - "8090:11434" # Expose OpenAI-compatible API on localhost:8090
     environment:
-      - OLLAMA_KEEP_ALIVE=5m
+      - OLLAMA_KEEP_ALIVE=30m  # Keep model loaded longer for better performance
     volumes:
       - ollama:/root/.ollama
     restart: unless-stopped
+    # Start Ollama server (we'll pull the model separately)
+    command: ["serve"]
 
   # Optional: PostgreSQL Database (commented out - using SQLite by default)
   # postgres:

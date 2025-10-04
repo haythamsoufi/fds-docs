@@ -26,6 +26,15 @@ from .retrieval_service import (
     SearchType
 )
 
+# Enhanced Retrieval Services
+from .enhanced_retrieval_service import EnhancedRetriever
+
+# Multimodal Processing
+from .multimodal_document_processor import MultimodalDocumentProcessor
+from .table_extraction_service import TableExtractionService
+from .chart_extraction_service import ChartExtractionService
+from .structured_data_service import StructuredDataService
+
 __all__ = [
     # Document Processing
     "DocumentProcessor",
@@ -49,5 +58,14 @@ __all__ = [
     "KeywordSearcher",
     "SemanticSearcher",
     "SearchResult",
-    "SearchType"
+    "SearchType",
+    
+    # Enhanced Retrieval Services
+    "EnhancedRetriever",
+    
+    # Multimodal Processing
+    "MultimodalDocumentProcessor",
+    "TableExtractionService",
+    "ChartExtractionService",
+    "StructuredDataService"
 ]

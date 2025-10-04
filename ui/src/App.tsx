@@ -7,6 +7,7 @@ import Query from './pages/Query'
 import Analytics from './pages/Analytics'
 import Settings from './pages/Settings'
 import Monitoring from './pages/Monitoring'
+import Methodology from './pages/Methodology'
 import './utils/apiTest' // Import for global API test function
 
 function App() {
@@ -26,6 +27,7 @@ function App() {
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/monitoring" element={<Monitoring />} />
+            <Route path="/methodology" element={<Methodology />} />
           </Routes>
         </Layout>
         <Toaster 

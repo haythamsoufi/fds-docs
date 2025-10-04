@@ -30,22 +30,47 @@ Comprehensive rollback procedures for different scenarios:
 - Automated rollback scripts
 - Monitoring and alerting
 
+### 🦙 [Llama Setup Guide](LLAMA_SETUP_GUIDE.md)
+Complete guide for using the powerful Llama3.1:70b model:
+- System requirements and hardware recommendations
+- Step-by-step installation and configuration
+- Enhanced retrieval settings (up to 200 chunks)
+- Performance optimization and troubleshooting
+- Model switching and emergency procedures
+
+### ⚡ [Llama Quick Reference](LLAMA_QUICK_REFERENCE.md)
+Quick reference card for Llama3.1:70b setup and troubleshooting:
+- 5-minute setup guide
+- Essential commands and configurations
+- Performance expectations and best practices
+- Emergency rollback procedures
+
+### 📚 [Citation and Numeric Answers](CITATION_AND_NUMERIC_ANSWERS.md)
+Complete guide to the enhanced citation system and numeric answer capabilities:
+- Automatic citation generation from retrieved chunks
+- Year-based numeric query detection and response
+- API integration and response formats
+- UI display and troubleshooting
+
 ## Quick Start
 
 ### For System Administrators
 1. Read the [RAG Upgrade Plan](RAG_UPGRADE_PLAN.md) for system overview
 2. Follow the [Migration Guide](MIGRATION_GUIDE.md) for step-by-step migration
-3. Keep [Rollback Procedures](ROLLBACK_PROCEDURES.md) ready for emergencies
+3. Set up [Llama3.1:70b model](LLAMA_SETUP_GUIDE.md) for maximum quality
+4. Keep [Rollback Procedures](ROLLBACK_PROCEDURES.md) ready for emergencies
 
 ### For Developers
 1. Review the architecture changes in [RAG Upgrade Plan](RAG_UPGRADE_PLAN.md)
 2. Understand the migration process in [Migration Guide](MIGRATION_GUIDE.md)
-3. Familiarize yourself with rollback procedures
+3. Configure [Llama3.1:70b model](LLAMA_SETUP_GUIDE.md) for enhanced performance
+4. Familiarize yourself with rollback procedures
 
 ### For DevOps Teams
 1. Study the deployment plan in [RAG Upgrade Plan](RAG_UPGRADE_PLAN.md)
-2. Prepare rollback scripts from [Rollback Procedures](ROLLBACK_PROCEDURES.md)
-3. Set up monitoring and alerting systems
+2. Deploy [Llama3.1:70b model](LLAMA_SETUP_GUIDE.md) with proper resource allocation
+3. Prepare rollback scripts from [Rollback Procedures](ROLLBACK_PROCEDURES.md)
+4. Set up monitoring and alerting systems
 
 ## System Components
 
@@ -65,6 +90,8 @@ Comprehensive rollback procedures for different scenarios:
 - ✅ Background processing with Celery
 - ✅ Comprehensive admin endpoints
 - ✅ Enhanced UI with citations and evidence blocks
+- ✅ Automatic citation generation from retrieved chunks
+- ✅ Numeric answer enhancement for year-based queries
 
 ## Migration Timeline
 

@@ -4,6 +4,7 @@ import logging
 from typing import List, Dict, Any, Tuple, Optional
 from dataclasses import dataclass
 import math
+import re
 
 from src.core.config import settings
 
@@ -64,10 +65,15 @@ class ConfidenceCalibrator:
         calibrated_score = max(0.0, min(1.0, calibrated_score))
         
         # Determine no-answer threshold
+        # Allow brief numeric answers if retrieval quality is reasonable
+        answer_text = (raw_answer or "").strip().lower()
+        numeric_like = bool(re.search(r"\b(\d+[\d,\.]*)\b", answer_text))
+        short_but_numeric = len(answer_text) < 20 and numeric_like and factors.get("retrieval_quality", 0.0) >= 0.2
+
         is_no_answer = (
-            calibrated_score < self.no_answer_threshold or
+            calibrated_score < (self.no_answer_threshold - 0.05 if short_but_numeric else self.no_answer_threshold) or
             len([s for s in top_k_scores if s >= self.min_chunk_score]) == 0 or
-            len(raw_answer.strip()) < 20  # Very short responses
+            (len(raw_answer.strip()) < 20 and not short_but_numeric)
         )
         
         reasoning = self._generate_reasoning(factors, is_no_answer)
@@ -120,7 +126,7 @@ class ConfidenceCalibrator:
 
     def _assess_answer_coherence(self, answer: str) -> float:
         """Assess answer coherence (0-1)."""
-        if not answer or len(answer.strip()) < 10:
+        if not answer or len(answer.strip()) < 5:
             return 0.0
         
         # Check for no-answer indicators
@@ -138,10 +144,13 @@ class ConfidenceCalibrator:
         good_indicators = ["according to", "based on", "the sources", "specifically"]
         good_score = sum(1 for indicator in good_indicators if indicator in answer_lower)
         
-        # Length appropriateness (not too short, not too long)
+        # Length appropriateness (not too short, not too long). Allow short numeric replies.
         length_score = 1.0
         if len(answer) < 30:
-            length_score = 0.3
+            if re.search(r"\b(\d+[\d,\.]*)\b", answer.lower()):
+                length_score = 0.8
+            else:
+                length_score = 0.3
         elif len(answer) > 1000:
             length_score = 0.8
         

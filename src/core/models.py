@@ -153,6 +153,8 @@ class QueryResponse(BaseModel):
     response_time: float
     intent: Optional[QueryIntent] = None
     confidence: Optional[float] = None
+    # Optional citations for UI; derived from top retrieved chunks
+    citations: Optional[List[Dict[str, Any]]] = None
 
 
 class ProcessingStatus(BaseModel):
